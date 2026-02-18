@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { Calendar, Clock, MapPin } from "lucide-react";
+import BookingReceipt from "@/components/BookingReceipt";
+import { Calendar, Clock, MapPin, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
+import { useToast } from "@/hooks/use-toast";
 
 const COURT_LABELS: Record<string, string> = {
   voli: "🏐 Voli",
@@ -19,6 +21,9 @@ const UserDashboard = () => {
   const { user, profile, loading } = useAuth();
   const [bookings, setBookings] = useState<any[]>([]);
   const [fetching, setFetching] = useState(true);
+  const [selectedBooking, setSelectedBooking] = useState<any | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!user) return;
@@ -30,6 +35,19 @@ const UserDashboard = () => {
       .then(({ data }) => {
         setBookings(data || []);
         setFetching(false);
+
+        // If redirected from payment, show the booking receipt
+        const paymentStatus = searchParams.get("payment");
+        const bookingId = searchParams.get("booking");
+        if (paymentStatus === "success" && bookingId && data) {
+          const found = data.find((b: any) => b.id === bookingId);
+          if (found) {
+            setSelectedBooking(found);
+            toast({ title: "Pembayaran diproses!", description: "Nota booking kamu sudah tersedia." });
+          }
+          // Clean up URL params
+          setSearchParams({}, { replace: true });
+        }
       });
   }, [user]);
 
@@ -63,7 +81,8 @@ const UserDashboard = () => {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="bg-card rounded-xl border border-border p-5 shadow hover:border-accent/30 transition"
+                  className="bg-card rounded-xl border border-border p-5 shadow hover:border-accent/30 transition cursor-pointer"
+                  onClick={() => setSelectedBooking(b)}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-lg font-heading tracking-wider text-foreground">
@@ -91,6 +110,11 @@ const UserDashboard = () => {
                       Rp {b.amount.toLocaleString("id-ID")}
                     </p>
                   </div>
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <span className="text-xs text-accent flex items-center gap-1 font-semibold">
+                      <FileText className="w-3 h-3" /> Lihat Nota
+                    </span>
+                  </div>
                 </motion.div>
               ))}
             </div>
@@ -98,6 +122,15 @@ const UserDashboard = () => {
         </div>
       </div>
       <Footer />
+
+      {/* Receipt Modal */}
+      {selectedBooking && (
+        <BookingReceipt
+          booking={selectedBooking}
+          userName={profile?.full_name || "User"}
+          onClose={() => setSelectedBooking(null)}
+        />
+      )}
     </div>
   );
 };
