@@ -120,10 +120,15 @@ serve(async (req) => {
     const requestTimestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
     const requestTarget = "/checkout/v1/payment";
 
+    // Build callback URL to redirect user back to dashboard after payment
+    const origin = req.headers.get("origin") || req.headers.get("referer")?.replace(/\/[^/]*$/, "") || "";
+    const callbackUrl = `${origin}/dashboard?payment=success&booking=${bookingId}`;
+
     const requestBody = JSON.stringify({
       order: {
         amount: amount,
         invoice_number: bookingId,
+        callback_url: callbackUrl,
       },
       payment: {
         payment_due_date: 60,
