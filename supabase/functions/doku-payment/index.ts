@@ -129,6 +129,7 @@ serve(async (req) => {
         amount: amount,
         invoice_number: bookingId,
         callback_url: callbackUrl,
+	auto_redirect: true,
       },
       payment: {
         payment_due_date: 60,
@@ -167,14 +168,15 @@ serve(async (req) => {
 
     console.log("DOKU response:", JSON.stringify(dokuData));
 
+    const payment_url: string = dokuData.response?.payment?.url;
     await supabase
       .from("bookings")
-      .update({ payment_status: "waiting_payment" })
+      .update({ payment_url: payment_url, payment_status: "waiting_payment" })
       .eq("id", bookingId);
 
     return new Response(
       JSON.stringify({
-        payment_url: dokuData.response?.payment?.url,
+        payment_url: payment_url,
         invoice_number: bookingId,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -19,6 +19,7 @@ interface BookingReceiptProps {
     time_slot: string;
     amount: number;
     payment_status: string;
+    payment_url: string;
     created_at: string;
   };
   userName: string;
@@ -176,9 +177,14 @@ const BookingReceipt = ({ booking, userName, onClose }: BookingReceiptProps) => 
         </div>
 
         {/* Download Button */}
-        <Button variant="hero" className="w-full mt-4" onClick={handleDownload}>
-          <Download className="w-4 h-4" /> Download Nota
-        </Button>
+        {booking.payment_status === "paid" ? 
+          <Button variant="hero" className="w-full mt-4" onClick={handleDownload}>
+            <Download className="w-4 h-4" /> Download Nota
+          </Button> :
+          <Button variant="hero" className="w-full mt-4" onClick={() => window.location.href = booking.payment_url}>
+            Bayar Sekarang
+          </Button>
+        }
       </motion.div>
     </div>
   );
