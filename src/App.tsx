@@ -13,7 +13,6 @@ import UserDashboard from "./pages/UserDashboard";
 import Chat from "./pages/Chat";
 import Gallery from "./pages/Gallery";
 import NotFound from "./pages/NotFound";
-import AIChatWidget from "./components/AIChatWidget";
 
 const queryClient = new QueryClient();
 
@@ -35,7 +34,6 @@ const App = () => (
             <Route path="/galeri/:courtId" element={<Gallery />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
-          <AIChatWidget />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>

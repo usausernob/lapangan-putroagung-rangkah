@@ -25,48 +25,62 @@ export function useChat(userId: string | undefined, role: "user" | "admin") {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchConversations = async () => {
+    if (!userId) return;
+    if (role === "user") {
+      const { data } = await supabase
+        .from("chat_conversations")
+        .select("*")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false });
+      
+      if (data && data.length > 0) {
+        setConversations(data as ChatConversation[]);
+        setActiveConversationId((prev) => prev || data[0].id);
+      } else {
+        const { data: newConv } = await supabase
+          .from("chat_conversations")
+          .insert({ user_id: userId })
+          .select()
+          .single();
+        if (newConv) {
+          setConversations([newConv as ChatConversation]);
+          setActiveConversationId(newConv.id);
+        }
+      }
+    } else {
+      const { data } = await supabase
+        .from("chat_conversations")
+        .select("*")
+        .order("updated_at", { ascending: false });
+      if (data) {
+        setConversations(data as ChatConversation[]);
+        setActiveConversationId((prev) => prev || (data.length > 0 ? data[0].id : null));
+      }
+    }
+    setLoading(false);
+  };
+
   // Fetch conversations
   useEffect(() => {
     if (!userId) return;
-
-    const fetchConversations = async () => {
-      if (role === "user") {
-        const { data } = await supabase
-          .from("chat_conversations")
-          .select("*")
-          .eq("user_id", userId)
-          .order("updated_at", { ascending: false });
-        
-        if (data && data.length > 0) {
-          setConversations(data as ChatConversation[]);
-          setActiveConversationId(data[0].id);
-        } else {
-          // Auto-create conversation for user
-          const { data: newConv } = await supabase
-            .from("chat_conversations")
-            .insert({ user_id: userId })
-            .select()
-            .single();
-          if (newConv) {
-            setConversations([newConv as ChatConversation]);
-            setActiveConversationId(newConv.id);
-          }
-        }
-      } else {
-        // Admin sees all conversations
-        const { data } = await supabase
-          .from("chat_conversations")
-          .select("*")
-          .order("updated_at", { ascending: false });
-        if (data) {
-          setConversations(data as ChatConversation[]);
-          if (data.length > 0) setActiveConversationId(data[0].id);
-        }
-      }
-      setLoading(false);
-    };
-
     fetchConversations();
+  }, [userId, role]);
+
+  // Realtime: listen for new/updated conversations (admin sees new users)
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel("conversations-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "chat_conversations" },
+        () => {
+          fetchConversations();
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [userId, role]);
 
   // Fetch messages for active conversation

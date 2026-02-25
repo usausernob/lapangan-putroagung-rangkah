@@ -49,6 +49,7 @@ const Booking = () => {
   const [showPayment, setShowPayment] = useState(false);
   const [showSOP, setShowSOP] = useState(false);
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
+  const [bookedSlots, setBookedSlots] = useState<Record<string, Set<string>>>({});
   const [bookingCounts, setBookingCounts] = useState<Record<string, number>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -57,27 +58,38 @@ const Booking = () => {
     return Array.from({ length: 7 }, (_, i) => addDays(today, i));
   }, []);
 
-  // Fetch real booking counts per court per day
+  // Fetch booked slots per court for selected date
   useEffect(() => {
-    const fetchCounts = async () => {
+    const fetchBookedSlots = async () => {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
       const { data } = await supabase
         .from("bookings")
-        .select("court_id")
-        .eq("booking_date", dateStr);
+        .select("court_id, time_slot")
+        .eq("booking_date", dateStr)
+        .neq("payment_status", "failed")
+        .neq("payment_status", "expired");
 
+      const slots: Record<string, Set<string>> = {};
       const counts: Record<string, number> = {};
       (data || []).forEach((b: any) => {
+        if (!slots[b.court_id]) slots[b.court_id] = new Set();
+        slots[b.court_id].add(b.time_slot);
         counts[b.court_id] = (counts[b.court_id] || 0) + 1;
       });
+      setBookedSlots(slots);
       setBookingCounts(counts);
     };
-    fetchCounts();
+    fetchBookedSlots();
   }, [selectedDate, showSOP]);
 
   const getCourtDayCount = (courtId: string) => bookingCounts[courtId] || 0;
   const isCourtFull = (courtId: string) => getCourtDayCount(courtId) >= 3;
-  const getAvailableCount = (courtId: string) => isCourtFull(courtId) ? 0 : TIME_SLOTS.length;
+  const isSlotBooked = (courtId: string, timeSlot: string) => bookedSlots[courtId]?.has(timeSlot) || false;
+  const getAvailableCount = (courtId: string) => {
+    const booked = bookedSlots[courtId]?.size || 0;
+    if (isCourtFull(courtId)) return 0;
+    return TIME_SLOTS.length - booked;
+  };
 
   const handleBooking = (courtId: string) => {
     if (!user) {
@@ -240,16 +252,18 @@ const Booking = () => {
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                         {TIME_SLOTS.map((slot) => {
                           const courtFull = isCourtFull(court.id);
+                          const slotTaken = isSlotBooked(court.id, slot.start);
+                          const disabled = courtFull || slotTaken;
                           const isSelected = selectedTime === slot.start && selectedCourtId === court.id;
                           return (
-                            <button key={slot.start} disabled={courtFull}
+                            <button key={slot.start} disabled={disabled}
                               onClick={() => {
                                 if (isSelected) { setSelectedTime(null); setSelectedCourtId(null); }
                                 else { setSelectedTime(slot.start); setSelectedCourtId(court.id); }
                               }}
-                              className={`relative p-2.5 rounded-lg text-center text-xs transition-all duration-200 ${courtFull ? "bg-destructive/5 text-muted-foreground cursor-not-allowed opacity-50 line-through" : isSelected ? "bg-primary text-secondary shadow-md ring-2 ring-accent" : "bg-muted/50 text-foreground border border-border hover:border-accent/50 hover:bg-muted"}`}>
+                              className={`relative p-2.5 rounded-lg text-center text-xs transition-all duration-200 ${disabled ? "bg-destructive/5 text-muted-foreground cursor-not-allowed opacity-50 line-through" : isSelected ? "bg-primary text-secondary shadow-md ring-2 ring-accent" : "bg-muted/50 text-foreground border border-border hover:border-accent/50 hover:bg-muted"}`}>
                               <span className="font-semibold">{slot.label}</span>
-                              <div className="text-[10px] mt-0.5 opacity-70">{courtFull ? "Penuh" : "Tersedia"}</div>
+                              <div className="text-[10px] mt-0.5 opacity-70">{slotTaken ? "Sudah Dipesan" : courtFull ? "Penuh" : "Tersedia"}</div>
                             </button>
                           );
                         })}
